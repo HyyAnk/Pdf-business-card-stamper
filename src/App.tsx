@@ -184,10 +184,10 @@ const defaultTextStyles: Record<keyof CardInfo, TextStyle> = {
 };
 
 const fieldLabels: Record<keyof CardInfo, string> = {
-  name: "Tên",
-  phone: "Số điện thoại",
+  name: "Full name",
+  phone: "Phone number",
   email: "Email",
-  address: "Địa chỉ",
+  address: "Office address",
 };
 
 const themePresets: Record<ThemeId, { label: string; accent: string; secondary: string; ink: string; soft: string }> = {
@@ -477,7 +477,7 @@ async function decodeQrImage(file: File) {
   canvas.height = image.naturalHeight || image.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx || !canvas.width || !canvas.height) {
-    throw new Error("Không đọc được ảnh QR.");
+    throw new Error("Could not read the QR image.");
   }
 
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -487,7 +487,7 @@ async function decodeQrImage(file: File) {
   });
 
   if (!result?.data) {
-    throw new Error("Không nhận diện được QR trong ảnh này.");
+    throw new Error("Could not detect a QR code in this image.");
   }
 
   return result.data;
@@ -654,8 +654,8 @@ function TextProperties({
       <div className="property-grid">
         <label>
           <input
-            aria-label="Cỡ chữ"
-            title="Cỡ chữ"
+            aria-label="Font size"
+            title="Font size"
             type="number"
             min={8}
             max={30}
@@ -665,8 +665,8 @@ function TextProperties({
         </label>
         <label>
           <input
-            aria-label="Màu chữ"
-            title="Màu chữ"
+            aria-label="Text color"
+            title="Text color"
             type="color"
             value={value.color}
             onChange={(event) => onChange(field, { color: event.target.value })}
@@ -675,8 +675,8 @@ function TextProperties({
       </div>
       <label>
         <select
-          aria-label="Font chữ"
-          title="Font chữ"
+          aria-label="Font family"
+          title="Font family"
           value={value.fontFamily}
           onChange={(event) => onChange(field, { fontFamily: event.target.value })}
         >
@@ -689,8 +689,8 @@ function TextProperties({
       </label>
       <label>
         <input
-          aria-label="Độ đậm"
-          title="Độ đậm"
+          aria-label="Font weight"
+          title="Font weight"
           type="range"
           min={400}
           max={900}
@@ -740,7 +740,7 @@ function PdfCanvas({
         });
       } catch (error) {
         if (canceled || (error as Error).name === "RenderingCancelledException") return;
-        setRenderError((error as Error).message || "Không render được trang PDF này.");
+        setRenderError((error as Error).message || "Could not render this PDF page.");
       }
     }
 
@@ -814,7 +814,7 @@ function Thumbnail({
         });
       } catch (error) {
         if (canceled || (error as Error).name === "RenderingCancelledException") return;
-        setRenderError("Lỗi thumbnail");
+        setRenderError("Thumbnail error");
       }
     }
 
@@ -1256,7 +1256,7 @@ export default function App() {
       pendingStageCenterRef.current = true;
       setPageCount(document.numPages);
     } catch (error) {
-      const message = (error as Error).message || "Không đọc được file PDF này.";
+      const message = (error as Error).message || "Could not read this PDF file.";
       setLoadError(message);
       setPdfBytes(null);
       setPdfDoc(null);
@@ -1369,7 +1369,7 @@ export default function App() {
   };
 
   const uploadQrImage = async (id: string, file: File) => {
-    updateQrItem(id, { mode: "image", status: "Đang đọc QR..." });
+    updateQrItem(id, { mode: "image", status: "Reading QR..." });
     try {
       const decodedText = await decodeQrImage(file);
       updateQrItem(id, {
@@ -1381,7 +1381,7 @@ export default function App() {
       updateQrItem(id, {
         mode: "image",
         decodedText: "",
-        status: (error as Error).message || "Không đọc được QR.",
+        status: (error as Error).message || "Could not read QR.",
       });
     }
   };
@@ -1607,7 +1607,7 @@ export default function App() {
 
         {loadError ? (
           <div className="load-error">
-            <strong>Không mở được PDF</strong>
+            <strong>Could not open PDF</strong>
             <span>{loadError}</span>
           </div>
         ) : null}
@@ -1615,7 +1615,7 @@ export default function App() {
         <section className="control-section">
           <div className="section-title">
             <User size={16} />
-            <span>Thông tin</span>
+            <span>Information</span>
           </div>
           {(["name", "phone", "email", "address"] as Array<keyof CardInfo>).map((field) => (
             <div className={`field-stack ${activeTextField === field ? "active" : ""}`} key={field}>
@@ -1638,11 +1638,11 @@ export default function App() {
         <section className="control-section legacy-text-section">
           <div className="section-title">
             <Type size={16} />
-            <span>Chữ</span>
+            <span>Text</span>
           </div>
           <div className="two-cols">
             <label>
-              <span>Cỡ</span>
+              <span>Size</span>
               <input
                 type="number"
                 min={8}
@@ -1652,7 +1652,7 @@ export default function App() {
               />
             </label>
             <label>
-              <span>Màu</span>
+              <span>Color</span>
               <input
                 type="color"
                 value={saved.textColor}
@@ -1686,7 +1686,7 @@ export default function App() {
               className="qr-add-button"
               onClick={addQrItem}
               disabled={qrItems.length >= 2}
-              title="Thêm QR"
+              title="Add QR"
               type="button"
             >
               +
@@ -1720,7 +1720,7 @@ export default function App() {
                         event.stopPropagation();
                         removeQrItem(item.id);
                       }}
-                      title="Xóa QR"
+                      title="Remove QR"
                     >
                       <Minus size={14} />
                     </button>
@@ -1732,7 +1732,7 @@ export default function App() {
                           className={item.mode === "image" ? "active" : ""}
                           onClick={() => updateQrItem(item.id, { mode: "image" })}
                         >
-                          Ảnh
+                          Image
                         </button>
                         <button
                           className={item.mode === "link" ? "active" : ""}
@@ -1755,7 +1755,7 @@ export default function App() {
                         <>
                           <label className="icon-input qr-upload-input">
                             <FileUp size={16} />
-                            <span>Upload ảnh QR, tự động nhận diện</span>
+                            <span>Upload QR image, auto-detect</span>
                             <input
                               type="file"
                               accept="image/png,image/jpeg,image/webp"
@@ -1859,8 +1859,8 @@ export default function App() {
       <main className="workspace" ref={workspaceRef}>
         <div className="topbar">
           <div>
-            <strong>{pdfDoc ? `Trang ${selectedPage}/${pageCount}` : "Chưa có PDF"}</strong>
-            <span>Chèn vào trang đang chọn</span>
+            <strong>{pdfDoc ? `Page ${selectedPage}/${pageCount}` : "No PDF loaded"}</strong>
+            <span>Insert on the selected page</span>
           </div>
           <div className="toolbar">
             <button onClick={() => setZoom((value) => clamp(value - 0.1, 0.45, 2.2))} title="Zoom out">
@@ -1870,12 +1870,12 @@ export default function App() {
             <button onClick={() => setZoom((value) => clamp(value + 0.1, 0.45, 2.2))} title="Zoom in">
               <ZoomIn size={18} />
             </button>
-            <button onClick={openFullscreen} title="Xem toàn màn hình">
+            <button onClick={openFullscreen} title="Fullscreen preview">
               <Expand size={18} />
             </button>
-            <button className="download-button" onClick={exportPdf} disabled={!pdfDoc || isExporting} title="Xuất PDF">
+            <button className="download-button" onClick={exportPdf} disabled={!pdfDoc || isExporting} title="Export PDF">
               {isExporting ? <Sparkles size={18} /> : <Download size={18} />}
-              <span>{isExporting ? "Đang xuất" : "Xuất PDF"}</span>
+              <span>{isExporting ? "Exporting" : "Export PDF"}</span>
             </button>
           </div>
         </div>
@@ -1972,8 +1972,8 @@ export default function App() {
             <div className="empty-state">
               <label className={`main-upload-zone ${isLoadingPdf ? "loading" : ""}`}>
                 <FileUp size={46} />
-                <strong>{isLoadingPdf ? "Đang đọc PDF..." : "Upload PDF"}</strong>
-                <span>Chọn file PDF để chèn business card ngay trên trình duyệt.</span>
+                <strong>{isLoadingPdf ? "Reading PDF..." : "Upload PDF"}</strong>
+                <span>Choose a PDF file to place a business card directly in your browser.</span>
                 <input
                   ref={mainUploadRef}
                   type="file"
@@ -2012,7 +2012,7 @@ export default function App() {
       <div className="wechat-modal-backdrop" onMouseDown={() => setWechatOpen(false)}>
         <div className="wechat-modal" onMouseDown={(event) => event.stopPropagation()}>
           {wechatQrCode ? <img src={wechatQrCode} alt="WeChat QR" /> : <QrCode size={96} />}
-          <span>Wechat ID: DuNgocMinhHoang</span>
+          <span>WeChat ID: DuNgocMinhHoang</span>
         </div>
       </div>
     ) : null}
