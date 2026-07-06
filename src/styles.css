@@ -874,6 +874,11 @@ input[type="range"] {
     rgba(255, 255, 255, 0.34);
 }
 
+.canvas-stage.has-pdf {
+  justify-content: flex-start;
+  padding: 32px max(32px, 50%);
+}
+
 .workspace-upload-button {
   position: absolute;
   top: 16px;

@@ -1044,6 +1044,9 @@ export default function App() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const canvasStageRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
+  const pendingStageCenterRef = useRef(false);
+  const zoomAnchorFrameRef = useRef<number | null>(null);
+  const zoomAnchorTimeoutRef = useRef<number | null>(null);
   const themeDropdownRef = useRef<HTMLElement>(null);
   const mainUploadRef = useRef<HTMLInputElement>(null);
   const workspaceUploadRef = useRef<HTMLInputElement>(null);
@@ -1086,6 +1089,17 @@ export default function App() {
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
+
+  useEffect(() => {
+    if (!pendingStageCenterRef.current || !pageSize.width) return;
+    const stage = canvasStageRef.current;
+    if (!stage) return;
+
+    window.requestAnimationFrame(() => {
+      stage.scrollLeft = Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2);
+      pendingStageCenterRef.current = false;
+    });
+  }, [pageSize.width, pageSize.height]);
 
   useEffect(() => {
     let canceled = false;
@@ -1229,6 +1243,7 @@ export default function App() {
       setFileName(file.name);
       setSelectedPage(1);
       setZoom(cardReferenceZoom);
+      pendingStageCenterRef.current = true;
       setPageCount(document.numPages);
     } catch (error) {
       const message = (error as Error).message || "Không đọc được file PDF này.";
@@ -1495,25 +1510,78 @@ export default function App() {
         return;
       }
 
-      const currentZoom = zoomRef.current;
       const rect = stage.getBoundingClientRect();
+      const clientX = event.clientX;
+      const clientY = event.clientY;
       const localX = event.clientX - rect.left;
       const localY = event.clientY - rect.top;
       const pointerX = localX + stage.scrollLeft;
       const pointerY = localY + stage.scrollTop;
+      const pageElement = stage.querySelector<HTMLElement>(".page-wrap");
+      const pageRect = pageElement?.getBoundingClientRect();
+      const pageAnchor =
+        pageRect && pageRect.width > 0 && pageRect.height > 0
+          ? {
+              x: (clientX - pageRect.left) / pageRect.width,
+              y: (clientY - pageRect.top) / pageRect.height,
+              isInside:
+                clientX >= pageRect.left &&
+                clientX <= pageRect.right &&
+                clientY >= pageRect.top &&
+                clientY <= pageRect.bottom,
+            }
+          : null;
+      const currentZoom = zoomRef.current;
       const nextZoom = clamp(currentZoom - event.deltaY * 0.0012, 0.45, 2.2);
+      if (nextZoom === currentZoom) return;
       const ratio = nextZoom / currentZoom;
 
       zoomRef.current = nextZoom;
       setZoom(nextZoom);
-      window.requestAnimationFrame(() => {
-        stage.scrollLeft = pointerX * ratio - localX;
-        stage.scrollTop = pointerY * ratio - localY;
+      const anchorToCursor = () => {
+        if (!pageAnchor?.isInside) {
+          stage.scrollLeft = pointerX * ratio - localX;
+          stage.scrollTop = pointerY * ratio - localY;
+          return;
+        }
+
+        const nextPageElement = stage.querySelector<HTMLElement>(".page-wrap");
+        const nextPageRect = nextPageElement?.getBoundingClientRect();
+        if (!nextPageRect) return;
+
+        const nextClientX = nextPageRect.left + pageAnchor.x * nextPageRect.width;
+        const nextClientY = nextPageRect.top + pageAnchor.y * nextPageRect.height;
+        stage.scrollLeft += nextClientX - clientX;
+        stage.scrollTop += nextClientY - clientY;
+      };
+
+      if (zoomAnchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(zoomAnchorFrameRef.current);
+      }
+      if (zoomAnchorTimeoutRef.current !== null) {
+        window.clearTimeout(zoomAnchorTimeoutRef.current);
+      }
+
+      zoomAnchorFrameRef.current = window.requestAnimationFrame(() => {
+        zoomAnchorFrameRef.current = null;
+        anchorToCursor();
       });
+      zoomAnchorTimeoutRef.current = window.setTimeout(() => {
+        zoomAnchorTimeoutRef.current = null;
+        anchorToCursor();
+      }, 120);
     };
 
     stage.addEventListener("wheel", handleWheel, { passive: false });
-    return () => stage.removeEventListener("wheel", handleWheel);
+    return () => {
+      stage.removeEventListener("wheel", handleWheel);
+      if (zoomAnchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(zoomAnchorFrameRef.current);
+      }
+      if (zoomAnchorTimeoutRef.current !== null) {
+        window.clearTimeout(zoomAnchorTimeoutRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -1803,7 +1871,7 @@ export default function App() {
         </div>
 
         <div
-          className="canvas-stage"
+          className={`canvas-stage ${pdfDoc ? "has-pdf" : "is-empty"}`}
           ref={canvasStageRef}
           onMouseDown={() => setSelectedCard(false)}
         >
