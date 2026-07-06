@@ -608,6 +608,10 @@ function InlineField({
     }
   }, [value]);
 
+  if (!value.trim()) {
+    return null;
+  }
+
   return (
     <div
       className={`inline-field ${className}`}
@@ -1009,6 +1013,7 @@ export default function App() {
     fontSize: 13,
     fontFamily: "Inter",
     textColor: "#111827",
+    cardEnabled: true,
     theme: "navy" as ThemeId,
     layout: "split" as LayoutId,
     opacity: 0.96,
@@ -1067,6 +1072,7 @@ export default function App() {
     {} as Record<keyof CardInfo, TextStyle>,
   );
   const activeTheme = saved.theme === "auto" ? autoTheme : themePresets[saved.theme];
+  const cardEnabled = saved.cardEnabled !== false;
   const qrItems: QrItem[] = useMemo(() => {
     const storedItems = (saved.qrItems ?? []).slice(0, 2).map((item) => ({
       ...item,
@@ -1090,6 +1096,13 @@ export default function App() {
       setActiveQrItemId(null);
     }
   }, [activeQrItemId, qrItems]);
+
+  useEffect(() => {
+    if (!cardEnabled) {
+      setSelectedCard(false);
+      setGuides({});
+    }
+  }, [cardEnabled]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -1449,7 +1462,7 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!selectedCard || !pageSize.width || ["INPUT", "SELECT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) {
+      if (!cardEnabled || !selectedCard || !pageSize.width || ["INPUT", "SELECT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) {
         return;
       }
       const moves: Record<string, [number, number]> = {
@@ -1470,10 +1483,10 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pageSize, selectedCard]);
+  }, [cardEnabled, pageSize, selectedCard]);
 
   const exportPdf = async () => {
-    if (!pdfBytes || !cardCaptureRef.current) return;
+    if (!cardEnabled || !pdfBytes || !cardCaptureRef.current) return;
     setIsExporting(true);
     try {
       await document.fonts?.ready;
@@ -1615,6 +1628,26 @@ export default function App() {
             <span>{loadError}</span>
           </div>
         ) : null}
+
+        <div className="business-card-row">
+          <strong>Business Card</strong>
+          <div className="card-toggle" aria-label="Business card mode">
+            <button
+              type="button"
+              className={cardEnabled ? "active" : ""}
+              onClick={() => setSaved((current) => ({ ...current, cardEnabled: true }))}
+            >
+              On
+            </button>
+            <button
+              type="button"
+              className={!cardEnabled ? "active" : ""}
+              onClick={() => setSaved((current) => ({ ...current, cardEnabled: false }))}
+            >
+              Off
+            </button>
+          </div>
+        </div>
 
         <section className="control-section">
           <div className="section-title">
@@ -1877,7 +1910,12 @@ export default function App() {
             <button onClick={openFullscreen} title="Fullscreen preview">
               <Expand size={18} />
             </button>
-            <button className="download-button" onClick={exportPdf} disabled={!pdfDoc || isExporting} title="Export PDF">
+            <button
+              className="download-button"
+              onClick={exportPdf}
+              disabled={!pdfDoc || !cardEnabled || isExporting}
+              title={cardEnabled ? "Export PDF" : "Turn on Business Card to export"}
+            >
               {isExporting ? <Sparkles size={18} /> : <Download size={18} />}
               <span>{isExporting ? "Exporting" : "Export PDF"}</span>
             </button>
@@ -1917,6 +1955,7 @@ export default function App() {
                 <>
                   {guides.x !== undefined ? <div className="snap-guide x" style={{ left: guides.x }} /> : null}
                   {guides.y !== undefined ? <div className="snap-guide y" style={{ top: guides.y }} /> : null}
+                  {cardEnabled ? (
                   <Rnd
                     className={`card-rnd ${selectedCard ? "selected" : ""}`}
                     bounds="parent"
@@ -1969,6 +2008,7 @@ export default function App() {
                       </div>
                     </div>
                   </Rnd>
+                  ) : null}
                 </>
               ) : null}
             </div>
