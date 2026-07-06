@@ -1005,17 +1005,18 @@ export default function App() {
     fontSize: 13,
     fontFamily: "Inter",
     textColor: "#111827",
-    theme: "auto" as ThemeId,
+    theme: "navy" as ThemeId,
     layout: "split" as LayoutId,
     opacity: 0.96,
     logoFrame: { x: 0.08, y: 0.22, w: 0.25, h: 0.42 } as LogoFrame,
     showQr: false,
-    qrMode: "link" as QrMode,
+    qrMode: "image" as QrMode,
     qrLink: "https://company.vn",
     qrItems: [] as QrItem[],
     defaultNameSizeMigrated: false,
     defaultFontInterMigrated: false,
     defaultInfoPlaceholderMigrated: false,
+    defaultThemeNavyMigrated: false,
   });
 
   const [pdfDoc, setPdfDoc] = useState<PdfDoc | null>(null);
@@ -1200,6 +1201,15 @@ export default function App() {
     });
   }, [saved.defaultInfoPlaceholderMigrated, setSaved]);
 
+  useEffect(() => {
+    if (saved.defaultThemeNavyMigrated) return;
+    setSaved((current) => ({
+      ...current,
+      defaultThemeNavyMigrated: true,
+      theme: !current.theme || current.theme === "auto" ? "navy" : current.theme,
+    }));
+  }, [saved.defaultThemeNavyMigrated, setSaved]);
+
   const handleInfoChange = (field: keyof CardInfo, value: string) => {
     setSaved((current) => ({
       ...current,
@@ -1342,7 +1352,7 @@ export default function App() {
       ...qrItems,
       {
         id,
-        mode: "link",
+        mode: "image",
         link: qrItems.length ? "" : (saved.qrLink || "https://company.vn"),
       },
     ]);
@@ -1719,16 +1729,16 @@ export default function App() {
                     <div className="qr-item-body">
                       <div className="segmented two">
                         <button
-                          className={item.mode === "link" ? "active" : ""}
-                          onClick={() => updateQrItem(item.id, { mode: "link" })}
-                        >
-                          Link
-                        </button>
-                        <button
                           className={item.mode === "image" ? "active" : ""}
                           onClick={() => updateQrItem(item.id, { mode: "image" })}
                         >
                           Ảnh
+                        </button>
+                        <button
+                          className={item.mode === "link" ? "active" : ""}
+                          onClick={() => updateQrItem(item.id, { mode: "link" })}
+                        >
+                          Link
                         </button>
                       </div>
                       {item.mode === "link" ? (
@@ -1745,7 +1755,7 @@ export default function App() {
                         <>
                           <label className="icon-input qr-upload-input">
                             <FileUp size={16} />
-                            <span>Upload ảnh QR</span>
+                            <span>Upload ảnh QR, tự động nhận diện</span>
                             <input
                               type="file"
                               accept="image/png,image/jpeg,image/webp"
