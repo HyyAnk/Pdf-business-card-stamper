@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Rnd } from "react-rnd";
 import { toPng } from "html-to-image";
 import {
@@ -601,9 +601,10 @@ function InlineField({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (ref.current && ref.current.textContent !== value) {
-      ref.current.textContent = value;
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element && document.activeElement !== element && element.textContent !== value) {
+      element.textContent = value;
     }
   }, [value]);
 
@@ -626,15 +627,18 @@ function InlineField({
         onFocus={() => onActivate(field)}
         onMouseDown={() => onActivate(field)}
         onInput={(event) => onChange(field, event.currentTarget.textContent ?? "")}
+        onPaste={(event) => {
+          event.preventDefault();
+          const text = event.clipboardData.getData("text/plain");
+          document.execCommand("insertText", false, text);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             (event.currentTarget as HTMLDivElement).blur();
           }
         }}
-      >
-        {value}
-      </div>
+      />
       <i className="inline-accent" style={{ background: accent }} />
     </div>
   );
