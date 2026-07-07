@@ -1,0 +1,4 @@
+interface:
+  display_name: "Credit Box Design"
+  short_description: "Design a reusable personal credit/contact box for web apps."
+  default_prompt: "Add the personal APP DESIGN credit box with phone, Zalo, Telegram, and WeChat QR popup."
