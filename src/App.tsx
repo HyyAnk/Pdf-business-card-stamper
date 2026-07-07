@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   Expand,
+  FileArchive,
   FileUp,
   Link,
   Mail,
@@ -337,6 +338,7 @@ const snapDistance = 10;
 const storageKey = "pdf-business-card-state";
 const cardReferenceZoom = 0.72;
 const wechatQrPayload = "https://u.wechat.com/kNE1QLDxXUun5q04_FphdtE?s=2";
+const bytesPerMb = 1024 * 1024;
 const canvasRenderLocks = new WeakMap<HTMLCanvasElement, Promise<void>>();
 
 function clamp(value: number, min: number, max: number) {
@@ -549,6 +551,136 @@ function downloadBytes(bytes: Uint8Array, filename: string, type: string) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function formatMb(bytes: number) {
+  return `${(bytes / bytesPerMb).toFixed(2)} MB`;
+}
+
+function canvasToJpegBytes(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) {
+          reject(new Error("Could not encode compressed PDF page."));
+          return;
+        }
+        resolve(new Uint8Array(await blob.arrayBuffer()));
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+async function createRasterPdf({
+  sourceBytes,
+  scale,
+  quality,
+  onProgress,
+}: {
+  sourceBytes: Uint8Array;
+  scale: number;
+  quality: number;
+  onProgress?: (done: number, total: number) => void;
+}) {
+  const loadingTask = pdfjsLib.getDocument({
+    data: sourceBytes.slice(),
+    stopAtErrors: false,
+  });
+  const sourceDoc = await loadingTask.promise;
+  const outputDoc = await PDFDocument.create();
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+
+  if (!context) {
+    throw new Error("Canvas unavailable.");
+  }
+
+  try {
+    for (let pageNumber = 1; pageNumber <= sourceDoc.numPages; pageNumber += 1) {
+      const sourcePage = await sourceDoc.getPage(pageNumber);
+      const outputViewport = sourcePage.getViewport({ scale: 1 });
+      const renderViewport = sourcePage.getViewport({ scale });
+
+      canvas.width = Math.max(1, Math.floor(renderViewport.width));
+      canvas.height = Math.max(1, Math.floor(renderViewport.height));
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      const renderTask = sourcePage.render({
+        canvasContext: context,
+        viewport: renderViewport,
+      });
+      await renderTask.promise;
+
+      const imageBytes = await canvasToJpegBytes(canvas, quality);
+      const image = await outputDoc.embedJpg(imageBytes);
+      const outputPage = outputDoc.addPage([outputViewport.width, outputViewport.height]);
+      outputPage.drawImage(image, {
+        x: 0,
+        y: 0,
+        width: outputViewport.width,
+        height: outputViewport.height,
+      });
+      onProgress?.(pageNumber, sourceDoc.numPages);
+    }
+
+    return await outputDoc.save({
+      useObjectStreams: true,
+      addDefaultPage: false,
+    });
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+    sourceDoc.destroy?.();
+  }
+}
+
+async function compressPdfToTarget({
+  sourceBytes,
+  targetBytes,
+  onStatus,
+  onProgress,
+}: {
+  sourceBytes: Uint8Array;
+  targetBytes: number;
+  onStatus?: (message: string) => void;
+  onProgress?: (done: number, total: number) => void;
+}) {
+  const presets = [
+    { scale: 2.4, quality: 0.9 },
+    { scale: 2.05, quality: 0.84 },
+    { scale: 1.75, quality: 0.78 },
+    { scale: 1.5, quality: 0.72 },
+    { scale: 1.25, quality: 0.66 },
+    { scale: 1.05, quality: 0.58 },
+    { scale: 0.9, quality: 0.5 },
+    { scale: 0.75, quality: 0.42 },
+  ];
+  let smallestOutput: Uint8Array | null = null;
+
+  for (let index = 0; index < presets.length; index += 1) {
+    const preset = presets[index];
+    onStatus?.(`Compressing ${index + 1}/${presets.length}`);
+    const output = await createRasterPdf({
+      sourceBytes,
+      scale: preset.scale,
+      quality: preset.quality,
+      onProgress,
+    });
+
+    if (!smallestOutput || output.byteLength < smallestOutput.byteLength) {
+      smallestOutput = output;
+    }
+
+    if (output.byteLength <= targetBytes) {
+      return output;
+    }
+  }
+
+  return smallestOutput ?? sourceBytes;
 }
 
 function useStoredState<T>(key: string, fallback: T) {
@@ -1022,10 +1154,12 @@ export default function App() {
     qrMode: "image" as QrMode,
     qrLink: "https://company.vn",
     qrItems: [] as QrItem[],
+    compressTargetMb: 20,
     defaultNameSizeMigrated: false,
     defaultFontInterMigrated: false,
     defaultInfoPlaceholderMigrated: false,
     defaultThemeNavyMigrated: false,
+    defaultCompressTarget20Migrated: false,
   });
 
   const [pdfDoc, setPdfDoc] = useState<PdfDoc | null>(null);
@@ -1042,6 +1176,8 @@ export default function App() {
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   const [qrCodes, setQrCodes] = useState<QrRenderItem[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressStatus, setCompressStatus] = useState("");
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [activeTextField, setActiveTextField] = useState<keyof CardInfo | null>(null);
@@ -1073,6 +1209,7 @@ export default function App() {
   );
   const activeTheme = saved.theme === "auto" ? autoTheme : themePresets[saved.theme];
   const cardEnabled = saved.cardEnabled !== false;
+  const compressTargetMb = saved.compressTargetMb ?? 20;
   const qrItems: QrItem[] = useMemo(() => {
     const storedItems = (saved.qrItems ?? []).slice(0, 2).map((item) => ({
       ...item,
@@ -1227,6 +1364,15 @@ export default function App() {
     }));
   }, [saved.defaultThemeNavyMigrated, setSaved]);
 
+  useEffect(() => {
+    if (saved.defaultCompressTarget20Migrated) return;
+    setSaved((current) => ({
+      ...current,
+      defaultCompressTarget20Migrated: true,
+      compressTargetMb: !current.compressTargetMb || current.compressTargetMb === 23 ? 20 : current.compressTargetMb,
+    }));
+  }, [saved.defaultCompressTarget20Migrated, setSaved]);
+
   const handleInfoChange = (field: keyof CardInfo, value: string) => {
     setSaved((current) => ({
       ...current,
@@ -1255,6 +1401,7 @@ export default function App() {
   const loadPdf = async (file: File) => {
     setIsLoadingPdf(true);
     setLoadError("");
+    setCompressStatus("");
     setPdfDoc(null);
     setPageCount(0);
     setPageSize({ width: 0, height: 0 });
@@ -1280,6 +1427,66 @@ export default function App() {
       setFileName("");
     } finally {
       setIsLoadingPdf(false);
+    }
+  };
+
+  const updateCompressTarget = (value: number) => {
+    const nextValue = Number.isFinite(value) ? clamp(value, 1, 500) : 20;
+    setSaved((current) => ({ ...current, compressTargetMb: nextValue }));
+  };
+
+  const compressPdf = async () => {
+    if (!pdfBytes) return;
+
+    const targetMb = clamp(Number(compressTargetMb) || 20, 1, 500);
+    const targetBytes = targetMb * bytesPerMb;
+    const originalBytes = pdfBytes.slice();
+    const originalSize = originalBytes.byteLength;
+
+    setIsCompressing(true);
+    setLoadError("");
+    setCompressStatus("Preparing");
+
+    try {
+      if (originalSize <= targetBytes) {
+        setCompressStatus(`Already ${formatMb(originalSize)} / ${targetMb} MB`);
+        return;
+      }
+
+      const compressedBytes = await compressPdfToTarget({
+        sourceBytes: originalBytes,
+        targetBytes,
+        onStatus: setCompressStatus,
+        onProgress: (done, total) => {
+          setCompressStatus(`Rendering page ${done}/${total}`);
+        },
+      });
+
+      if (compressedBytes.byteLength >= originalSize) {
+        setCompressStatus(`No smaller result. Current ${formatMb(originalSize)}`);
+        return;
+      }
+
+      const loadingTask = pdfjsLib.getDocument({
+        data: compressedBytes.slice(),
+        stopAtErrors: false,
+      });
+      const document = await loadingTask.promise;
+      setPdfBytes(compressedBytes);
+      setPdfDoc(document);
+      setPageCount(document.numPages);
+      setSelectedPage((current) => clamp(current, 1, document.numPages));
+      setPageSize({ width: 0, height: 0 });
+      pendingStageCenterRef.current = true;
+      setCompressStatus(
+        compressedBytes.byteLength <= targetBytes
+          ? `Preview updated: ${formatMb(originalSize)} -> ${formatMb(compressedBytes.byteLength)}`
+          : `Closest result: ${formatMb(originalSize)} -> ${formatMb(compressedBytes.byteLength)}`,
+      );
+    } catch (error) {
+      setCompressStatus((error as Error).message || "Could not compress this PDF.");
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -1830,6 +2037,35 @@ export default function App() {
         </section>
 
         <div className="panel-bottom">
+          <section className="control-section compact-section compress-dock">
+            <div className="compress-row">
+              <button
+                className="compress-button"
+                onClick={compressPdf}
+                disabled={!pdfDoc || !pdfBytes || isCompressing || isExporting}
+                title="Compress PDF"
+                type="button"
+              >
+                {isCompressing ? <Sparkles size={16} /> : <FileArchive size={16} />}
+                <span>{isCompressing ? "Compressing" : "Compress"}</span>
+              </button>
+              <label className="compress-target-input">
+                <input
+                  aria-label="Target PDF size in MB"
+                  type="number"
+                  min={1}
+                  max={500}
+                  step={1}
+                  value={compressTargetMb}
+                  disabled={isCompressing}
+                  onChange={(event) => updateCompressTarget(Number(event.target.value))}
+                />
+                <span>MB</span>
+              </label>
+            </div>
+            {compressStatus ? <div className="compress-status">{compressStatus}</div> : null}
+          </section>
+
           <section className="control-section compact-section theme-dock" ref={themeDropdownRef}>
             <button
               className="dropdown-trigger"

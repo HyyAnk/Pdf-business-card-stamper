@@ -153,6 +153,97 @@ button {
   margin-top: auto;
 }
 
+.compress-dock {
+  gap: 7px;
+}
+
+.compress-row {
+  display: grid;
+  grid-template-columns: 118px minmax(120px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.compress-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 8px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #dc2626, #7f1d1d);
+  border: 1px solid #991b1b;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.2);
+}
+
+.compress-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #991b1b);
+  border-color: #dc2626;
+}
+
+.compress-button:disabled {
+  color: #7b8794;
+  background: #e5eaf0;
+  border-color: #cbd5e1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.compress-target-input {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 40px !important;
+  padding: 0 9px;
+  color: #991b1b !important;
+  background: #ffffff;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: 8px;
+  font-size: 11px !important;
+  font-weight: 900;
+}
+
+.control-section .compress-target-input input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  color: #172033;
+  text-align: right;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  box-shadow: none;
+  font-weight: 900;
+}
+
+.compress-target-input span {
+  display: block;
+  line-height: 1;
+  text-align: right;
+}
+
+.compress-status {
+  min-height: 28px;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: #475467;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .theme-dock {
   position: relative;
 }
